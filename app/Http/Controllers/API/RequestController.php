@@ -579,6 +579,60 @@ class RequestController extends BaseApiController
     }
 
     /**
+ * Approve emergency request
+ *
+ * @param Request $request
+ * @param int $id
+ * @return JsonResponse
+ */
+public function approve(Request $request, int $id): JsonResponse
+{
+    try {
+        if (!$this->userCan('approve-requests')) {
+            return $this->forbiddenResponse('You do not have permission to approve requests.');
+        }
+
+        $emergencyRequest = RequestEntry::findOrFail($id);
+
+        if ($emergencyRequest->status !== 'pending') {
+            return $this->errorResponse('Can only approve pending requests.', 400);
+        }
+
+        $validated = $request->validate([
+            'approved_by' => 'required|integer|exists:users,id',
+            'approval_notes' => 'nullable|string|max:500'
+        ]);
+
+        DB::beginTransaction();
+
+        // Update request status to approved (which might transition to assigned)
+        $emergencyRequest->update([
+            'status' => 'assigned', // or 'approved' if you have that status
+            'approved_by' => $validated['approved_by'],
+            'approved_at' => now()
+        ]);
+
+        // Log approval activity
+        $this->logActivity('Emergency request approved', [
+            'request_id' => $emergencyRequest->request_id,
+            'approved_by' => $validated['approved_by'],
+            'notes' => $validated['approval_notes'] ?? null
+        ]);
+
+        DB::commit();
+
+        return $this->successResponse(
+            $emergencyRequest->load($this->getDefaultRelations()),
+            'Emergency request approved successfully.'
+        );
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+        return $this->handleException($e, 'approving emergency request');
+    }
+}
+
+    /**
      * Get active emergency requests
      *
      * @param Request $request
