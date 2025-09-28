@@ -56,6 +56,8 @@ Route::prefix('auth')->group(function () {
 Route::get('system/health', [SystemController::class, 'health']);
 Route::get('system/status', [SystemController::class, 'status']);
 
+
+
 // ================================
 // PROTECTED ROUTES (Authentication Required)
 // ================================
@@ -93,6 +95,47 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('import', [UserController::class, 'importUsers']);
         Route::get('export', [UserController::class, 'exportUsers']);
     });
+
+// ================================
+// SUPPLIER MANAGEMENT ROUTES
+// ================================
+Route::prefix('suppliers')->middleware(['auth:api'])->group(function () {    
+    // SPECIFIC ROUTES FIRST (no parameters)
+    Route::get('search', [SupplierController::class, 'search']);
+    Route::get('statistics', [SupplierController::class, 'getStatistics']);
+    
+    // CORE CRUD ROUTES
+    Route::get('/', [SupplierController::class, 'index']);           // List suppliers
+    Route::post('/', [SupplierController::class, 'store']);          // Create supplier
+    
+    // SINGLE SUPPLIER ROUTES (use consistent parameter name 'id')
+    Route::get('{id}', [SupplierController::class, 'show']);         // Get single supplier
+    Route::put('{id}', [SupplierController::class, 'update']);       // Update supplier  
+    Route::delete('{id}', [SupplierController::class, 'destroy']);   // Delete supplier
+    
+    // SUPPLIER-SPECIFIC FEATURE ROUTES (all use 'id' parameter)
+    Route::get('{id}/resources', [SupplierController::class, 'getResources']);
+    Route::post('{id}/resources', [SupplierController::class, 'addResource']);
+    Route::put('{id}/resources/{resource}', [SupplierController::class, 'updateResource']);
+    
+    // Order routes
+    Route::get('{id}/orders', [SupplierController::class, 'getOrders']);
+    Route::post('{id}/orders', [SupplierController::class, 'createOrder']);
+    Route::put('orders/{order}/status', [SupplierController::class, 'updateOrderStatus']);
+    Route::get('orders/{order}/tracking', [SupplierController::class, 'trackOrder']);
+    
+    // Analytics routes
+    Route::get('{id}/performance', [SupplierController::class, 'getPerformance']);
+    Route::get('{id}/analytics', [SupplierController::class, 'getAnalytics']);
+    Route::get('{id}/reliability', [SupplierController::class, 'getReliability']);
+    
+    // Batch routes
+    Route::get('{id}/batches', [SupplierController::class, 'getBatches']);
+    Route::post('{id}/batches', [SupplierController::class, 'createBatch']);
+    Route::get('batches/{batch}/track', [SupplierController::class, 'trackBatch']);
+});
+
+
 
     // ================================
     // HOSPITAL MANAGEMENT ROUTES
@@ -293,33 +336,6 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     // ================================
-    // SUPPLIER MANAGEMENT ROUTES
-    // ================================
-    Route::apiResource('suppliers', SupplierController::class);
-    Route::prefix('suppliers')->group(function () {
-        // Supplier Resources
-        Route::get('{supplier}/resources', [SupplierController::class, 'getResources']);
-        Route::post('{supplier}/resources', [SupplierController::class, 'addResource']);
-        Route::put('{supplier}/resources/{resource}', [SupplierController::class, 'updateResource']);
-        
-        // Supply Orders
-        Route::get('{supplier}/orders', [SupplierController::class, 'getOrders']);
-        Route::post('{supplier}/orders', [SupplierController::class, 'createOrder']);
-        Route::put('orders/{order}/status', [SupplierController::class, 'updateOrderStatus']);
-        Route::get('orders/{order}/tracking', [SupplierController::class, 'trackOrder']);
-        
-        // Supplier Performance
-        Route::get('{supplier}/performance', [SupplierController::class, 'getPerformance']);
-        Route::get('{supplier}/reliability', [SupplierController::class, 'getReliability']);
-        Route::get('{supplier}/analytics', [SupplierController::class, 'getAnalytics']);
-        
-        // Resource Batches
-        Route::get('{supplier}/batches', [SupplierController::class, 'getBatches']);
-        Route::post('{supplier}/batches', [SupplierController::class, 'createBatch']);
-        Route::get('batches/{batch}/track', [SupplierController::class, 'trackBatch']);
-    });
-
-    // ================================
     // VEHICLE & TRANSPORT ROUTES
     // ================================
     Route::apiResource('vehicles', VehicleController::class);
@@ -490,7 +506,7 @@ Route::middleware(['auth:sanctum', 'throttle:ai-operations'])->group(function ()
 // ================================
 // WEBHOOK ROUTES (External Systems)
 // ================================
-Route::prefix('webhooks')->middleware('throttle:webhooks')->group(function () {
+Route::prefix('webhooks')->group(function () {
     Route::post('supplier-updates', [SupplierController::class, 'handleSupplierWebhook']);
     Route::post('sensor-data', [SensorController::class, 'handleSensorWebhook']);
     Route::post('transport-updates', [VehicleController::class, 'handleTransportWebhook']);

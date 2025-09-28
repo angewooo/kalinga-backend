@@ -18,6 +18,14 @@ class RouteServiceProvider extends ServiceProvider
 
             Route::middleware('web')
                 ->group(base_path('routes/web.php'));
+
+            Route::model('supplier', \App\Models\Supplier::class);
+            
+            Route::bind('supplier', function ($value) {
+            return \App\Models\Supplier::where('supplier_id', $value)->firstOrFail();
+            });
         });
     }
+
+    
 }
