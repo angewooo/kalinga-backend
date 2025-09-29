@@ -4,14 +4,18 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Hospital extends Model
 {
     use HasFactory;
 
+    protected $primaryKey = 'hospital_id';
+    public $incrementing = true;
+
     protected $fillable = [
         'name',
-        'address',
+        'address', 
         'latitude',
         'longitude',
         'capacity',
@@ -22,18 +26,27 @@ class Hospital extends Model
         'status'
     ];
 
-    public function resources()
+    /**
+     * Relationship with hospital_resources table
+     */
+    public function resources(): HasMany
     {
-        return $this->hasMany(HospitalResource::class, 'hospital_id');
+        return $this->hasMany(HospitalResource::class, 'hospital_id', 'hospital_id');
     }
 
-    public function responders()
+    /**
+     * Relationship with responders
+     */
+    public function responders(): HasMany
     {
-        return $this->hasMany(Responder::class, 'hospital_id');
+        return $this->hasMany(Responder::class, 'hospital_id', 'hospital_id');
     }
 
-    public function vehicles()
+    /**
+     * Relationship with vehicles  
+     */
+    public function vehicles(): HasMany
     {
-        return $this->hasMany(Vehicle::class, 'hospital_id');
+        return $this->hasMany(Vehicle::class, 'hospital_id', 'hospital_id');
     }
 }

@@ -142,30 +142,37 @@ Route::prefix('suppliers')->middleware(['auth:api'])->group(function () {
     // ================================
     Route::apiResource('hospitals', HospitalController::class);
     Route::prefix('hospitals')->group(function () {
-        // Hospital Resources
-        Route::get('{hospital}/resources', [HospitalController::class, 'getResources']);
+        // Hospital Resources - FIXED method names
+        Route::get('{hospital}/resources', [HospitalController::class, 'resources']);
         Route::post('{hospital}/resources', [HospitalController::class, 'addResource']);
         Route::put('{hospital}/resources/{resource}', [HospitalController::class, 'updateResource']);
         Route::delete('{hospital}/resources/{resource}', [HospitalController::class, 'removeResource']);
         
-        // Resource Thresholds
+        // Add missing routes from your controller
+        Route::get('{hospital}/responders', [HospitalController::class, 'responders']);
+        Route::get('{hospital}/vehicles', [HospitalController::class, 'vehicles']);
+        Route::get('{hospital}/utilization', [HospitalController::class, 'utilization']);
+        Route::get('{hospital}/performance', [HospitalController::class, 'performance']);
+        Route::get('{hospital}/capacity', [HospitalController::class, 'capacity']);
+        Route::get('{hospital}/nearby', [HospitalController::class, 'nearby']);
+        Route::get('{hospital}/search', [HospitalController::class, 'search']);
+        
+        // Resource Thresholds - check if these methods exist
         Route::get('{hospital}/thresholds', [HospitalController::class, 'getThresholds']);
         Route::post('{hospital}/thresholds', [HospitalController::class, 'setThreshold']);
         Route::put('{hospital}/thresholds/{threshold}', [HospitalController::class, 'updateThreshold']);
         
-        // Inventory Management
+        // Inventory Management - check if these methods exist
         Route::get('{hospital}/inventory', [HospitalController::class, 'getInventory']);
         Route::get('{hospital}/inventory/logs', [HospitalController::class, 'getInventoryLogs']);
         Route::post('{hospital}/inventory/adjustment', [HospitalController::class, 'adjustInventory']);
         
-        // Hospital Analytics
+        // Hospital Analytics - check if these methods exist
         Route::get('{hospital}/analytics', [HospitalController::class, 'getAnalytics']);
         Route::get('{hospital}/requests/history', [HospitalController::class, 'getRequestHistory']);
-        Route::get('{hospital}/capacity', [HospitalController::class, 'getCapacity']);
-        Route::get('{hospital}/performance', [HospitalController::class, 'getPerformance']);
     });
 
-    // Bulk Hospital Operations
+    // Bulk Hospital Operations - check if these methods exist
     Route::prefix('hospitals/bulk')->group(function () {
         Route::post('create', [HospitalController::class, 'bulkCreate']);
         Route::put('update', [HospitalController::class, 'bulkUpdate']);
@@ -173,6 +180,7 @@ Route::prefix('suppliers')->middleware(['auth:api'])->group(function () {
         Route::get('export-inventory', [HospitalController::class, 'exportInventory']);
     });
 
+    
     // ================================
     // REQUEST MANAGEMENT ROUTES
     // ================================

@@ -9,6 +9,14 @@ class HospitalResource extends Model
 {
     use HasFactory;
 
+    protected $primaryKey = 'resource_id';
+    public $incrementing = true;
+
+    protected $table = 'hospital_resources';
+
+    // Disable timestamps since the table uses last_updated
+    public $timestamps = false;
+
     protected $fillable = [
         'hospital_id',
         'resource_type',
@@ -16,26 +24,53 @@ class HospitalResource extends Model
         'quantity_available',
         'total_cost',
         'cost_per_unit',
-        'unit'
+        'unit',
+        'last_updated'
     ];
 
+    protected $casts = [
+        'last_updated' => 'datetime',
+        'total_cost' => 'decimal:2',
+        'cost_per_unit' => 'decimal:2'
+    ];
+
+    /**
+     * Relationship with hospital
+     */
     public function hospital()
     {
-        return $this->belongsTo(Hospital::class, 'hospital_id');
+        return $this->belongsTo(Hospital::class, 'hospital_id', 'hospital_id');
     }
 
+    /**
+     * Relationship with batches
+     */
     public function batches()
     {
-        return $this->hasMany(ResourceBatch::class, 'resource_id');
+        return $this->hasMany(ResourceBatch::class, 'resource_id', 'resource_id');
     }
 
-    public function thresholds()
+    /**
+     * Relationship with thresholds
+     */
+    public function threshold()
     {
-        return $this->hasMany(ResourceThreshold::class, 'resource_id');
+        return $this->hasOne(ResourceThreshold::class, 'resource_id', 'resource_id');
     }
 
-    public function historicalDemands()
+    /**
+     * Override the create method to set last_updated
+     */
+    protected static function boot()
     {
-        return $this->hasMany(HistoricalDemand::class, 'resource_id');
+        parent::boot();
+
+        static::creating(function ($model) {
+            $model->last_updated = now();
+        });
+
+        static::updating(function ($model) {
+            $model->last_updated = now();
+        });
     }
 }

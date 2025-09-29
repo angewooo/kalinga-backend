@@ -321,45 +321,47 @@ abstract class BaseApiController extends Controller
      * 
      * FIXES: Auth crashes when checking permissions
      */
-    protected function userCan(string $permission, $resource = null): bool
-    {
-        try {
-            // Multiple safety checks
-            if (!function_exists('auth')) {
-                return false;
-            }
-
-            if (!auth()->check()) {
-                return false;
-            }
-
-            $user = auth()->user();
-            if (!$user) {
-                return false;
-            }
-
-            // Check if user has the hasPermissionTo method (Spatie permissions)
-            if (method_exists($user, 'hasPermissionTo')) {
-                return $user->hasPermissionTo($permission);
-            }
-
-            // Fallback permission check
-            if (method_exists($user, 'can')) {
-                return $user->can($permission, $resource);
-            }
-
-            // Default deny if no permission system available
-            return false;
-
-        } catch (\Exception $e) {
-            // Safe fallback - deny permission if check fails
-            $this->safeLog('warning', 'Permission check failed', [
-                'permission' => $permission,
-                'error' => $e->getMessage()
-            ]);
+   protected function userCan(string $permission, $resource = null): bool
+{
+    try {
+        // Multiple safety checks
+        if (!function_exists('auth')) {
             return false;
         }
+
+        if (!auth()->check()) {
+            return false;
+        }
+
+        $user = auth()->user();
+        if (!$user) {
+            return false;
+        }
+
+        // Check if user has the hasPermissionTo method (Spatie permissions)
+        if (method_exists($user, 'hasPermissionTo')) {
+            // FIX: Use sanctum guard since all permissions are now stored with sanctum guard
+            return $user->hasPermissionTo($permission, 'sanctum');
+        }
+
+        // Fallback permission check
+        if (method_exists($user, 'can')) {
+            return $user->can($permission, $resource);
+        }
+
+        // Default deny if no permission system available
+        return false;
+
+    } catch (\Exception $e) {
+        // Safe fallback - deny permission if check fails
+        $this->safeLog('warning', 'Permission check failed', [
+            'permission' => $permission,
+            'error' => $e->getMessage()
+        ]);
+        return false;
     }
+}
+
 
     /**
      * SAFE Resource Retrieval with Relationships
