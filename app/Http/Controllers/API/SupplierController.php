@@ -86,7 +86,7 @@ class SupplierController extends Controller
 
             $supplier = Supplier::create($supplierData);
 
-            Log::info("Supplier created: {$supplier->name} by user " . auth()->id());
+            Log::info("Supplier created: {$supplier->name} by user " . ($this->currentUserId() ?? 'unknown'));
 
             DB::commit();
 
@@ -159,7 +159,8 @@ class SupplierController extends Controller
 
             $supplier->update($updateData);
 
-            Log::info("Supplier updated: {$supplier->name} by user " . auth()->id());
+            Log::info("Supplier updated: {$supplierName} by user " . ($this->currentUserId() ?? 'unknown'));
+
 
             DB::commit();
 
@@ -185,7 +186,8 @@ class SupplierController extends Controller
             $supplierName = $supplier->name;
             $supplier->delete();
 
-            Log::info("Supplier deleted: {$supplierName} by user " . auth()->id());
+            Log::info("Supplier deleted: {$supplierName} by user " . ($this->currentUserId() ?? 'unknown'));
+
 
             DB::commit();
 

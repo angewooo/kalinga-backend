@@ -9,8 +9,11 @@ class AllocationAlgorithm extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['name', 'description', 'version'];
+    protected $primaryKey = 'algorithm_id';
 
+    protected $fillable = ['name', 'description', 'version'];
+    public $timestamps = false;
+    protected $table = 'allocation_algorithms';
     public function tests()
     {
         return $this->hasMany(AllocationTest::class, 'algorithm_id');

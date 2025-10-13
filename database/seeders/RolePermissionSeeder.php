@@ -1,4 +1,5 @@
 <?php
+
 namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
@@ -7,38 +8,30 @@ use Spatie\Permission\Models\Permission;
 
 class RolePermissionSeeder extends Seeder
 {
-    public function run()
+    public function run(): void
     {
-        $permissions = [
-            'view-dashboard',
-            'manage-hospitals',
-            'handle-requests',
-            'manage-resources',
-            'view-reports',
-            'manage-users',
-            'manage-suppliers',
-            'view-analytics',
-            'handle-assignments',
-            'manage-vehicles',
-            'view-notifications',
-            'manage-system'
-        ];
-
-        foreach ($permissions as $permission) {
-            Permission::firstOrCreate(['name' => $permission]);
+        $roles = ['Admin', 'Dispatcher', 'Responder'];
+        foreach ($roles as $r) {
+            Role::firstOrCreate(['name' => $r, 'guard_name' => 'sanctum']);
         }
 
-        $admin = Role::firstOrCreate(['name' => 'admin']);
-        $responder = Role::firstOrCreate(['name' => 'responder']);
-        $hospital_admin = Role::firstOrCreate(['name' => 'hospital_admin']);
-        $citizen = Role::firstOrCreate(['name' => 'citizen']);
-        $superadmin = Role::firstOrCreate(['name' => 'superadmin']);
+        $permissions = [
+            'manage users',
+            'create users',
+            'edit users',
+            'delete users',
+            'update-users',
+            'view users',
+            'view-users',
+            'manage hospitals',
+            'view requests',
+            'assign responders',
+            'monitor system',
+        ];
+        foreach ($permissions as $p) {
+            Permission::firstOrCreate(['name' => $p, 'guard_name' => 'sanctum']);
+        }
 
-        // assign permissions
-        $admin->givePermissionTo(Permission::all());
-        $responder->givePermissionTo(['view-dashboard','handle-requests','handle-assignments','view-notifications']);
-        $hospital_admin->givePermissionTo(['view-dashboard','manage-resources','view-reports','manage-suppliers','view-analytics','view-notifications']);
-        $citizen->givePermissionTo(['view-dashboard','view-notifications']);
-        $superadmin->givePermissionTo(Permission::all());
+        Role::where('name', 'Admin')->first()->givePermissionTo(Permission::all());
     }
 }

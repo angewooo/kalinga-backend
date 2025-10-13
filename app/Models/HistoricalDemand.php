@@ -10,6 +10,9 @@ class HistoricalDemand extends Model
     use HasFactory;
 
     protected $fillable = ['resource_id', 'demand_value', 'recorded_at'];
+    public $timestamps = false;
+    protected $table = 'historical_demand';
+    protected $primaryKey = 'demand_id';
 
     public function resource()
     {

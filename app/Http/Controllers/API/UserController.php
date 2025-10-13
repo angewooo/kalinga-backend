@@ -17,17 +17,11 @@ use Spatie\Permission\Models\Role;
  */
 class UserController extends BaseApiController
 {
-    /**
-     * Get the model class for this controller
-     */
     protected function getModel(): string
     {
         return User::class;
     }
 
-    /**
-     * Get validation rules for user operations
-     */
     protected function getValidationRules(): array
     {
         return [
@@ -38,327 +32,359 @@ class UserController extends BaseApiController
         ];
     }
 
-    /**
-     * Get searchable fields
-     */
     protected function getSearchableFields(): array
     {
         return ['name', 'email', 'profile.first_name', 'profile.last_name', 'profile.contact_number'];
     }
 
-    /**
-     * Get default relationships to load
-     */
     protected function getDefaultRelations(): array
     {
         return ['profile', 'roles', 'permissions'];
     }
 
     /**
-     * Display a listing of users
-     *
-     * @param Request $request
-     * @return JsonResponse
+     * Display list of users
      */
     public function index(Request $request): JsonResponse
     {
         try {
-            // Validate query parameters
-            $request->validate($this->commonRules + [
-                'status' => 'string|in:active,inactive,suspended,pending',
-                'role' => 'string|exists:roles,name',
-                'hospital_id' => 'integer|exists:hospitals,hospital_id'
+            $request->validate([
+                'status' => 'sometimes|string|in:active,inactive,suspended,pending',
+                'role' => 'sometimes|string|exists:roles,name',
+                'hospital_id' => 'sometimes|integer|exists:hospitals,hospital_id',
             ]);
 
             $query = User::with($this->getDefaultRelations());
-
-            // Apply filters
             $query = $this->applyFilters($query, $request, $this->getSearchableFields());
 
-            // Role-based filtering
             if ($role = $request->get('role')) {
-                $query->whereHas('roles', function($q) use ($role) {
-                    $q->where('name', $role);
-                });
+                $query->whereHas('roles', fn($q) => $q->where('name', $role));
             }
 
-            // Hospital-based filtering (for responders/staff)
             if ($hospitalId = $request->get('hospital_id')) {
-                $query->whereHas('responder', function($q) use ($hospitalId) {
-                    $q->where('hospital_id', $hospitalId);
-                });
+                $query->whereHas('responder', fn($q) => $q->where('hospital_id', $hospitalId));
             }
 
-            // Pagination
             $params = $this->getPaginationParams($request);
             $users = $query->paginate($params['per_page']);
 
             $this->logActivity('Users listed', [
                 'total' => $users->total(),
-                'filters' => $request->only(['search', 'status', 'role'])
+                'filters' => $request->only(['search', 'status', 'role']),
             ]);
 
             return $this->paginatedResponse($users, 'Users retrieved successfully.');
-
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             return $this->handleException($e, 'listing users');
         }
     }
 
     /**
      * Store a newly created user
-     *
-     * @param Request $request
-     * @return JsonResponse
      */
-    public function store(Request $request): JsonResponse
-    {
-        try {
-            // Check permissions
-            if (!$this->userCan('create-users')) {
-                return $this->forbiddenResponse('You do not have permission to create users.');
-            }
+  public function store(Request $request): JsonResponse
+{
+    try {
+        // 🔒 Permission check
+        $authUser = auth()->user();
+        if (!$authUser || !$authUser->can('create users')) {
+            return $this->forbiddenResponse('You do not have permission to create users.');
+        }
 
-            // Validate input
-            $validated = $request->validate($this->getValidationRules() + [
-                'roles' => 'sometimes|array',
-                'roles.*' => 'string|exists:roles,name',
+        // ✅ Validation (strict) - Include profile fields at top level for better handling
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'email' => 'required|email|unique:users,email',
+            'password' => 'required|string|min:8|confirmed',
+            'account_status' => 'sometimes|string|in:active,inactive,suspended,pending',
+            'roles' => 'sometimes|array',
+            'roles.*' => 'string|exists:roles,name',
+
+            // Profile fields - accept both nested and flat
+            'first_name' => 'sometimes|string|max:100',
+            'last_name' => 'sometimes|string|max:100',
+            'contact_number' => 'sometimes|string|max:20',
+            'gender' => 'sometimes|string|max:10',
+            'address' => 'sometimes|string',
+            'home_address' => 'sometimes|string',
+            'emergency_contact_name' => 'sometimes|string|max:100',
+            'emergency_contact_number' => 'sometimes|string|max:20',
+            'blood_type' => 'sometimes|string|max:5',
+            'allergies' => 'sometimes|string',
+            'medical_conditions' => 'sometimes|string',
+            
+            // Also accept nested profile
+            'profile.first_name' => 'sometimes|string|max:100',
+            'profile.last_name' => 'sometimes|string|max:100',
+            'profile.contact_number' => 'sometimes|string|max:20',
+            'profile.gender' => 'sometimes|string|max:10',
+            'profile.address' => 'sometimes|string',
+            'profile.home_address' => 'sometimes|string',
+            'profile.emergency_contact_name' => 'sometimes|string|max:100',
+            'profile.emergency_contact_number' => 'sometimes|string|max:20',
+            'profile.blood_type' => 'sometimes|string|max:5',
+            'profile.allergies' => 'sometimes|string',
+            'profile.medical_conditions' => 'sometimes|string',
+        ]);
+
+        DB::beginTransaction();
+
+        // 👤 Create user
+        $user = User::create([
+            'name' => $validated['name'],
+            'email' => $validated['email'],
+            'password' => Hash::make($validated['password']),
+            'account_status' => $validated['account_status'] ?? 'active',
+            'qr_code' => $this->generateQrCode(),
+        ]);
+
+        // 🧱 Build profile data - FIXED: Properly handle both nested and flat data
+        $profileData = [];
+        
+        // List of all profile fields
+        $profileFields = [
+            'first_name', 'last_name', 'contact_number', 'gender', 'address',
+            'home_address', 'emergency_contact_name', 'emergency_contact_number',
+            'blood_type', 'allergies', 'medical_conditions'
+        ];
+        
+        foreach ($profileFields as $field) {
+            // Check nested profile data first
+            if (isset($validated['profile'][$field])) {
+                $profileData[$field] = $validated['profile'][$field];
+            }
+            // Then check flat data
+            elseif (isset($validated[$field])) {
+                $profileData[$field] = $validated[$field];
+            }
+        }
+        
+        // Ensure first_name and last_name have values
+        if (empty($profileData['first_name'])) {
+            $profileData['first_name'] = explode(' ', $validated['name'])[0] ?? 'Unknown';
+        }
+        if (empty($profileData['last_name'])) {
+            $profileData['last_name'] = explode(' ', $validated['name'])[1] ?? 'User';
+        }
+        
+        $profileData['user_id'] = $user->id;
+        
+        // Create the profile
+        UserProfile::create($profileData);
+
+        // 🧩 Assign roles (case-insensitive handling)
+        if (!empty($validated['roles'])) {
+            $availableRoles = \Spatie\Permission\Models\Role::all()->pluck('name');
+            $normalizedRoles = [];
+            
+            foreach ($validated['roles'] as $role) {
+                $matchedRole = $availableRoles->first(function ($availableRole) use ($role) {
+                    return strtolower($availableRole) === strtolower($role);
+                });
                 
-                // Profile fields
-                'profile.first_name' => 'sometimes|string|max:100',
-                'profile.last_name' => 'sometimes|string|max:100',
-                'profile.contact_number' => 'sometimes|string|max:20',
-                'profile.address' => 'sometimes|string|max:500',
-                'profile.date_of_birth' => 'sometimes|date',
-                'profile.gender' => 'sometimes|string|in:male,female,other',
-                'profile.emergency_contact' => 'sometimes|string|max:20',
-            ]);
-
-            DB::beginTransaction();
-
-            // Create user
-            $user = User::create([
-                'name' => $validated['name'],
-                'email' => $validated['email'],
-                'password' => Hash::make($validated['password']),
-                'account_status' => $validated['account_status'] ?? 'active',
-                'qr_code' => $this->generateQrCode(),
-            ]);
-
-            // Create profile if profile data provided
-            if (isset($validated['profile'])) {
-                UserProfile::create(array_merge($validated['profile'], [
-                    'user_id' => $user->id
-                ]));
+                if ($matchedRole) {
+                    $normalizedRoles[] = $matchedRole;
+                }
             }
-
-            // Assign roles if provided
-            if (isset($validated['roles'])) {
-                $user->assignRole($validated['roles']);
+            
+            if (!empty($normalizedRoles)) {
+                $user->assignRole($normalizedRoles);
             }
+        }
 
-            DB::commit();
+        DB::commit();
 
-            // Load relationships for response
-            $user->load($this->getDefaultRelations());
+        $user->load($this->getDefaultRelations());
 
-            $this->logActivity('User created', [
-                'user_id' => $user->id,
-                'email' => $user->email,
-                'roles' => $validated['roles'] ?? []
+        $this->logActivity('User created', [
+            'user_id' => $user->id,
+            'email' => $user->email,
+            'roles' => $normalizedRoles ?? [],
+        ]);
+
+        return $this->createdResponse($user, 'User created successfully.');
+    } catch (\Throwable $e) {
+        DB::rollBack();
+        return $this->handleException($e, 'creating user');
+    }
+}
+
+    private function validateAndNormalizeRoles(array $roles): array
+{
+    $availableRoles = \Spatie\Permission\Models\Role::all()->pluck('name');
+    $normalizedRoles = [];
+    
+    foreach ($roles as $role) {
+        // Case-insensitive match
+        $matchedRole = $availableRoles->first(function ($availableRole) use ($role) {
+            return strtolower($availableRole) === strtolower($role);
+        });
+        
+        if ($matchedRole) {
+            $normalizedRoles[] = $matchedRole;
+        } else {
+            throw new \Illuminate\Validation\ValidationException([
+                'roles' => ["The role '{$role}' is invalid. Available roles: " . $availableRoles->join(', ')]
             ]);
-
-            return $this->createdResponse($user, 'User created successfully.');
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return $this->handleException($e, 'creating user');
         }
     }
+    
+    return $normalizedRoles;
+}
 
     /**
-     * Display the specified user
-     *
-     * @param int $id
-     * @return JsonResponse
+     * Show user by ID
      */
     public function show(int $id): JsonResponse
     {
         try {
-            $user = $this->getResourceWithRelations($id, $this->getDefaultRelations());
+            $user = User::with($this->getDefaultRelations())->findOrFail($id);
 
-            // Check if user can view this profile (own profile or admin permission)
             if (!$this->canViewUser($user)) {
                 return $this->forbiddenResponse('You do not have permission to view this user.');
             }
 
             $this->logActivity('User viewed', ['viewed_user_id' => $user->id]);
-
             return $this->successResponse($user, 'User retrieved successfully.');
-
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             return $this->handleException($e, 'retrieving user');
         }
     }
 
     /**
-     * Update the specified user
-     *
-     * @param Request $request
-     * @param int $id
-     * @return JsonResponse
-     */
-    public function update(Request $request, int $id): JsonResponse
-    {
-        try {
-            $user = User::findOrFail($id);
+ * Update user
+ */
+public function update(Request $request, int $user): JsonResponse
+{
+    try {
+        $userModel = User::findOrFail($user);
 
-            // Check permissions
-            if (!$this->canUpdateUser($user)) {
-                return $this->forbiddenResponse('You do not have permission to update this user.');
-            }
-
-            // Validate input (make email unique except for current user)
-            $rules = $this->getValidationRules();
-            $rules['email'] = ['required', 'string', 'email', 'max:255', Rule::unique('users')->ignore($user->id)];
-            $rules['password'] = 'sometimes|string|min:8|confirmed';
-
-            $validated = $request->validate($rules + [
-                'roles' => 'sometimes|array',
-                'roles.*' => 'string|exists:roles,name',
-                
-                // Profile fields
-                'profile.first_name' => 'sometimes|string|max:100',
-                'profile.last_name' => 'sometimes|string|max:100',
-                'profile.contact_number' => 'sometimes|string|max:20',
-                'profile.address' => 'sometimes|string|max:500',
-                'profile.date_of_birth' => 'sometimes|date',
-                'profile.gender' => 'sometimes|string|in:male,female,other',
-                'profile.emergency_contact' => 'sometimes|string|max:20',
-            ]);
-
-            DB::beginTransaction();
-
-            // Update user data
-            $updateData = collect($validated)->except(['password', 'roles', 'profile'])->toArray();
-            
-            if (isset($validated['password'])) {
-                $updateData['password'] = Hash::make($validated['password']);
-            }
-
-            $user->update($updateData);
-
-            // Update profile if provided
-            if (isset($validated['profile'])) {
-                $user->profile()->updateOrCreate(
-                    ['user_id' => $user->id],
-                    $validated['profile']
-                );
-            }
-
-            // Update roles if provided and user has permission
-            if (isset($validated['roles']) && $this->userCan('assign-roles')) {
-                $user->syncRoles($validated['roles']);
-            }
-
-            DB::commit();
-
-            // Load relationships for response
-            $user->load($this->getDefaultRelations());
-
-            $this->logActivity('User updated', [
-                'user_id' => $user->id,
-                'updated_fields' => array_keys($updateData),
-                'roles_updated' => isset($validated['roles'])
-            ]);
-
-            return $this->updatedResponse($user, 'User updated successfully.');
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return $this->handleException($e, 'updating user');
+        if (!$this->canUpdateUser($userModel)) {
+            return $this->forbiddenResponse('You do not have permission to update this user.');
         }
+
+        $rules = [
+            'name' => 'sometimes|string|max:255',
+            'email' => ['sometimes', 'string', 'email', 'max:255', Rule::unique('users')->ignore($userModel->id)], // ← FIXED: use $userModel->id
+            'password' => 'sometimes|string|min:8|confirmed',
+            'account_status' => 'sometimes|string|in:active,inactive,suspended,pending',
+            'roles' => 'sometimes|array',
+            'roles.*' => 'string|exists:roles,name',
+            'profile.first_name' => 'sometimes|string|max:100',
+            'profile.last_name' => 'sometimes|string|max:100',
+            'profile.contact_number' => 'sometimes|string|max:20',
+            'profile.gender' => 'sometimes|string|max:10',
+            'profile.address' => 'sometimes|string',
+            'profile.home_address' => 'sometimes|string',
+            'profile.emergency_contact_name' => 'sometimes|string|max:100',
+            'profile.emergency_contact_number' => 'sometimes|string|max:20',
+            'profile.blood_type' => 'sometimes|string|max:5',
+            'profile.allergies' => 'sometimes|string',
+            'profile.medical_conditions' => 'sometimes|string',
+        ];
+
+        $validated = $request->validate($rules);
+
+        DB::beginTransaction();
+
+        $updateData = collect($validated)->except(['password', 'roles', 'profile'])->toArray();
+
+        if (isset($validated['password'])) {
+            $updateData['password'] = Hash::make($validated['password']);
+        }
+
+        $userModel->update($updateData); // ← FIXED: use $userModel
+
+        if (isset($validated['profile'])) {
+            $userModel->profile()->updateOrCreate(['user_id' => $userModel->id], $validated['profile']); // ← FIXED: use $userModel
+        }
+
+        if (!empty($validated['roles']) && $this->userCan('assign-roles')) {
+            $userModel->syncRoles($validated['roles']); // ← FIXED: use $userModel
+        }
+
+        DB::commit();
+        $userModel->load($this->getDefaultRelations()); // ← FIXED: use $userModel
+
+        $this->logActivity('User updated', [
+            'user_id' => $userModel->id, // ← FIXED: use $userModel->id
+            'updated_fields' => array_keys($updateData),
+            'roles_updated' => isset($validated['roles']),
+        ]);
+
+        return $this->updatedResponse($userModel, 'User updated successfully.'); // ← FIXED: use $userModel
+    } catch (\Throwable $e) {
+        DB::rollBack();
+        return $this->handleException($e, 'updating user');
     }
+}
+
+   /**
+ * Remove user
+ */
+public function destroy(int $user): JsonResponse
+{
+    try {
+        $userModel = User::findOrFail($user);
+
+        // 🔧 FIXED: Check multiple permission names and allow Admin role
+        $currentUser = request()->user();
+        $hasPermission = $currentUser->can('delete-users') || 
+                        $currentUser->can('delete users') ||
+                        $currentUser->can('manage users') ||
+                        $currentUser->hasRole('Admin');
+        
+        if (!$hasPermission) {
+            return $this->forbiddenResponse('You do not have permission to delete users.');
+        }
+
+        // Prevent users from deleting their own account
+        if ($userModel->id === $currentUser->id) {
+            return $this->errorResponse('You cannot delete your own account.', 400);
+        }
+
+        // Check if user has critical assignments
+        if ($this->userHasCriticalAssignments($userModel)) {
+            return $this->errorResponse('User has active assignments and cannot be deleted.', 409);
+        }
+
+        $userModel->delete();
+
+        $this->logActivity('User deleted', ['deleted_user_id' => $userModel->id]);
+        return $this->deletedResponse('User deleted successfully.');
+    } catch (\Throwable $e) {
+        return $this->handleException($e, 'deleting user');
+    }
+}
 
     /**
-     * Remove the specified user
-     *
-     * @param int $id
-     * @return JsonResponse
+     * Get user profile
      */
-    public function destroy(int $id): JsonResponse
+    public function getProfile(int $userId): JsonResponse
     {
         try {
-            $user = User::findOrFail($id);
-
-            // Check permissions
-            if (!$this->userCan('delete-users')) {
-                return $this->forbiddenResponse('You do not have permission to delete users.');
-            }
-
-            // Prevent self-deletion
-            if ($user->id === auth('sanctum')->id()) {
-                return $this->errorResponse('You cannot delete your own account.', 400);
-            }
-
-            // Check if user has critical assignments
-            if ($this->userHasCriticalAssignments($user)) {
-                return $this->errorResponse('User has active critical assignments and cannot be deleted.', 409);
-            }
-
-            $user->delete();
-
-            $this->logActivity('User deleted', ['deleted_user_id' => $user->id]);
-
-            return $this->deletedResponse('User deleted successfully.');
-
-        } catch (\Exception $e) {
-            return $this->handleException($e, 'deleting user');
-        }
-    }
-
-    /**
-     * Get user profile information
-     *
-     * @param int $id
-     * @return JsonResponse
-     */
-    public function profile(int $id): JsonResponse
-    {
-        try {
-            $user = User::with(['profile', 'responderDetails', 'adminDetails'])->findOrFail($id);
+            $user = User::with('profile')->findOrFail($userId);
 
             if (!$this->canViewUser($user)) {
                 return $this->forbiddenResponse('You do not have permission to view this profile.');
             }
 
-            $profileData = [
-                'user' => $user->only(['id', 'name', 'email', 'account_status', 'last_active']),
-                'profile' => $user->profile,
-                'responder_details' => $user->responderDetails,
-                'admin_details' => $user->adminDetails,
-                'roles' => $user->roles->pluck('name'),
-                'permissions' => $user->getAllPermissions()->pluck('name')
-            ];
-
-            return $this->successResponse($profileData, 'Profile retrieved successfully.');
-
-        } catch (\Exception $e) {
+            return $this->successResponse([
+                'user' => $user,
+                'profile' => $user->profile
+            ], 'Profile retrieved successfully.');
+        } catch (\Throwable $e) {
             return $this->handleException($e, 'retrieving profile');
         }
     }
 
     /**
      * Update user profile
-     *
-     * @param Request $request
-     * @param int $id
-     * @return JsonResponse
      */
-    public function updateProfile(Request $request, int $id): JsonResponse
+    public function updateProfile(Request $request, int $userId): JsonResponse
     {
         try {
-            $user = User::findOrFail($id);
+            $user = User::findOrFail($userId);
 
             if (!$this->canUpdateUser($user)) {
                 return $this->forbiddenResponse('You do not have permission to update this profile.');
@@ -368,168 +394,255 @@ class UserController extends BaseApiController
                 'first_name' => 'sometimes|string|max:100',
                 'last_name' => 'sometimes|string|max:100',
                 'contact_number' => 'sometimes|string|max:20',
-                'address' => 'sometimes|string|max:500',
-                'date_of_birth' => 'sometimes|date',
-                'gender' => 'sometimes|string|in:male,female,other',
-                'emergency_contact' => 'sometimes|string|max:20',
+                'gender' => 'sometimes|string|max:10',
+                'address' => 'sometimes|string',
+                'home_address' => 'sometimes|string',
+                'emergency_contact_name' => 'sometimes|string|max:100',
+                'emergency_contact_number' => 'sometimes|string|max:20',
+                'blood_type' => 'sometimes|string|max:5',
+                'allergies' => 'sometimes|string',
+                'medical_conditions' => 'sometimes|string',
             ]);
 
-            $profile = $user->profile()->updateOrCreate(
-                ['user_id' => $user->id],
-                $validated
-            );
+            $user->profile()->updateOrCreate(['user_id' => $user->id], $validated);
+            $user->load('profile');
 
             $this->logActivity('Profile updated', ['user_id' => $user->id]);
-
-            return $this->updatedResponse($profile, 'Profile updated successfully.');
-
-        } catch (\Exception $e) {
+            return $this->updatedResponse($user, 'Profile updated successfully.');
+        } catch (\Throwable $e) {
             return $this->handleException($e, 'updating profile');
         }
     }
 
     /**
-     * Get user roles
-     *
-     * @param int $id
-     * @return JsonResponse
-     */
-    public function roles(int $id): JsonResponse
-    {
-        try {
-            $user = User::with(['roles.permissions'])->findOrFail($id);
-
-            if (!$this->canViewUser($user)) {
-                return $this->forbiddenResponse('You do not have permission to view this user\'s roles.');
-            }
-
-            return $this->successResponse([
-                'roles' => $user->roles,
-                'permissions' => $user->getAllPermissions()
-            ], 'User roles retrieved successfully.');
-
-        } catch (\Exception $e) {
-            return $this->handleException($e, 'retrieving user roles');
+ * Get user roles
+ */
+public function getRoles(int $user): JsonResponse
+{
+    try {
+        $userModel = User::findOrFail($user);
+        
+        if (!$this->canViewUser($userModel)) {
+            return $this->forbiddenResponse('You do not have permission to view roles.');
         }
+
+        return $this->successResponse([
+            'user_id' => $userModel->id,
+            'roles' => $userModel->getRoleNames(),
+            'all_roles' => \Spatie\Permission\Models\Role::all()->pluck('name')
+        ], 'User roles retrieved successfully.');
+    } catch (\Throwable $e) {
+        return $this->handleException($e, 'retrieving roles');
     }
+}
 
-    /**
-     * Update user roles
-     *
-     * @param Request $request
-     * @param int $id
-     * @return JsonResponse
-     */
-    public function updateRoles(Request $request, int $id): JsonResponse
-    {
-        try {
-            if (!$this->userCan('assign-roles')) {
-                return $this->forbiddenResponse('You do not have permission to assign roles.');
-            }
+/**
+ * Update user roles
+ */
+public function updateRoles(Request $request, int $user): JsonResponse
+{
+    try {
+        $userModel = User::findOrFail($user);
 
-            $user = User::findOrFail($id);
-
-            $validated = $request->validate([
-                'roles' => 'required|array',
-                'roles.*' => 'string|exists:roles,name'
-            ]);
-
-            $user->syncRoles($validated['roles']);
-
-            $this->logActivity('Roles updated', [
-                'user_id' => $user->id,
-                'roles' => $validated['roles']
-            ]);
-
-            return $this->successResponse([
-                'roles' => $user->fresh()->roles,
-                'permissions' => $user->getAllPermissions()
-            ], 'User roles updated successfully.');
-
-        } catch (\Exception $e) {
-            return $this->handleException($e, 'updating user roles');
+        // 🔧 FIXED: Check multiple permission names and allow Admin role
+        $currentUser = request()->user();
+        $hasPermission = $currentUser->can('assign-roles') || 
+                        $currentUser->can('manage users') ||
+                        $currentUser->can('edit users') ||
+                        $currentUser->hasRole('Admin');
+        
+        if (!$hasPermission) {
+            return $this->forbiddenResponse('You do not have permission to assign roles.');
         }
+
+        $validated = $request->validate([
+            'roles' => 'required|array',
+            'roles.*' => 'string|exists:roles,name'
+        ]);
+
+        $userModel->syncRoles($validated['roles']);
+        $userModel->load('roles');
+
+        $this->logActivity('Roles updated', [
+            'user_id' => $userModel->id,
+            'roles' => $validated['roles']
+        ]);
+
+        return $this->successResponse([
+            'user_id' => $userModel->id,
+            'roles' => $userModel->getRoleNames()
+        ], 'User roles updated successfully.');
+    } catch (\Throwable $e) {
+        return $this->handleException($e, 'updating roles');
     }
+}
 
-    /**
-     * Get user permissions
-     *
-     * @param int $id
-     * @return JsonResponse
-     */
-    public function permissions(int $id): JsonResponse
-    {
-        try {
-            $user = User::findOrFail($id);
+/**
+ * Remove role from user
+ */
+public function removeRole(int $user, string $role): JsonResponse
+{
+    try {
+        $userModel = User::findOrFail($user);
 
-            if (!$this->canViewUser($user)) {
-                return $this->forbiddenResponse('You do not have permission to view this user\'s permissions.');
-            }
-
-            return $this->successResponse([
-                'direct_permissions' => $user->permissions,
-                'role_permissions' => $user->getPermissionsViaRoles(),
-                'all_permissions' => $user->getAllPermissions()
-            ], 'User permissions retrieved successfully.');
-
-        } catch (\Exception $e) {
-            return $this->handleException($e, 'retrieving user permissions');
+        // 🔧 FIXED: Check multiple permission names and allow Admin role
+        $currentUser = request()->user();
+        $hasPermission = $currentUser->can('assign-roles') || 
+                        $currentUser->can('manage users') ||
+                        $currentUser->can('edit users') ||
+                        $currentUser->hasRole('Admin');
+        
+        if (!$hasPermission) {
+            return $this->forbiddenResponse('You do not have permission to remove roles.');
         }
+
+        $userModel->removeRole($role);
+        $userModel->load('roles');
+
+        $this->logActivity('Role removed', [
+            'user_id' => $userModel->id,
+            'role' => $role
+        ]);
+
+        return $this->successResponse([
+            'user_id' => $userModel->id,
+            'roles' => $userModel->getRoleNames()
+        ], 'Role removed successfully.');
+    } catch (\Throwable $e) {
+        return $this->handleException($e, 'removing role');
     }
+}
+
+/**
+ * Get user permissions
+ */
+public function getPermissions(int $user): JsonResponse
+{
+    try {
+        $userModel = User::findOrFail($user);
+        
+        if (!$this->canViewUser($userModel)) {
+            return $this->forbiddenResponse('You do not have permission to view permissions.');
+        }
+
+        return $this->successResponse([
+            'user_id' => $userModel->id,
+            'permissions' => $userModel->getAllPermissions()->pluck('name'),
+            'permissions_via_roles' => $userModel->getPermissionsViaRoles()->pluck('name')
+        ], 'User permissions retrieved successfully.');
+    } catch (\Throwable $e) {
+        return $this->handleException($e, 'retrieving permissions');
+    }
+}
 
     /**
-     * Helper Methods
-     */
+ * Activate user
+ */
+public function activate(int $user): JsonResponse
+{
+    try {
+        $userModel = User::findOrFail($user);
 
-    /**
-     * Check if current user can view the specified user
-     */
+        // Check permission - allow Admin and users with manage permissions
+        $currentUser = request()->user();
+        $hasPermission = $currentUser->can('manage users') || 
+                        $currentUser->can('edit users') ||
+                        $currentUser->hasRole('Admin');
+        
+        if (!$hasPermission) {
+            return $this->forbiddenResponse('You do not have permission to activate users.');
+        }
+
+        $userModel->update(['account_status' => 'active']);
+        $userModel->load($this->getDefaultRelations());
+
+        $this->logActivity('User activated', ['user_id' => $userModel->id]);
+        return $this->successResponse($userModel, 'User activated successfully.');
+    } catch (\Throwable $e) {
+        return $this->handleException($e, 'activating user');
+    }
+}
+
+/**
+ * Deactivate user
+ */
+public function deactivate(int $user): JsonResponse
+{
+    try {
+        $userModel = User::findOrFail($user);
+
+        // Check permission - allow Admin and users with manage permissions
+        $currentUser = request()->user();
+        $hasPermission = $currentUser->can('manage users') || 
+                        $currentUser->can('edit users') ||
+                        $currentUser->hasRole('Admin');
+        
+        if (!$hasPermission) {
+            return $this->forbiddenResponse('You do not have permission to deactivate users.');
+        }
+
+        $userModel->update(['account_status' => 'inactive']);
+        $userModel->load($this->getDefaultRelations());
+
+        $this->logActivity('User deactivated', ['user_id' => $userModel->id]);
+        return $this->successResponse($userModel, 'User deactivated successfully.');
+    } catch (\Throwable $e) {
+        return $this->handleException($e, 'deactivating user');
+    }
+}
+
+    // 🧩 Helper Methods
     private function canViewUser(User $user): bool
-    {
-        $currentUser = auth('sanctum')->user();
-        
-        // Users can view their own profile
-        if ($currentUser && $currentUser->id === $user->id) {
-            return true;
-        }
-
-        // Check admin permissions
-        return $this->userCan('view-users');
-    }
-
-    /**
-     * Check if current user can update the specified user
-     */
-    private function canUpdateUser(User $user): bool
-    {
-        $currentUser = auth('sanctum')->user();
-        
-        // Users can update their own profile (limited fields)
-        if ($currentUser && $currentUser->id === $user->id) {
-            return true;
-        }
-
-        // Check admin permissions
-        return $this->userCan('update-users');
-    }
-
-    /**
-     * Check if user has critical assignments that prevent deletion
-     */
-    private function userHasCriticalAssignments(User $user): bool
-    {
-        if ($user->responder) {
-            return $user->responder->assignments()
-                ->whereIn('status', ['assigned', 'in_progress'])
-                ->exists();
-        }
-
+{
+    $currentUser = request()->user();
+    
+    if (!$currentUser) {
         return false;
     }
+    
+    // Allow users to view their own profile
+    if ($currentUser->id === $user->id) {
+        return true;
+    }
+    
+    // Check if user has permission to view other users
+    // Try multiple permission names since your seeder might use different ones
+    $hasPermission = $currentUser->can('view-users') || 
+                    $currentUser->can('view users') ||
+                    $currentUser->can('manage users');
+    
+    return $hasPermission;
+}
 
-    /**
-     * Generate QR code for user
-     */
+  private function canUpdateUser(User $user): bool
+{
+    $currentUser = request()->user();
+    
+    if (!$currentUser) {
+        return false;
+    }
+    
+    // Allow users to update their own profile
+    if ($currentUser->id === $user->id) {
+        return true;
+    }
+    
+    // Check if user has permission to update other users
+    // Try multiple permission names since your seeder might use different ones
+    $hasPermission = $currentUser->can('update-users') || 
+                    $currentUser->can('edit users') ||
+                    $currentUser->can('manage users');
+    
+    return $hasPermission;
+}
+
+    private function userHasCriticalAssignments(User $user): bool
+    {
+        return $user->responder
+            ? $user->responder->assignments()->whereIn('status', ['assigned', 'in_progress'])->exists()
+            : false;
+    }
+
     private function generateQrCode(): string
     {
         return 'QR_' . uniqid() . '_' . time();

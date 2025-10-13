@@ -16,7 +16,8 @@ class SupplyOrder extends Model
         'status',
         'total_cost'
     ];
-
+    protected $primaryKey = 'order_id';
+    public $timestamps = false;
     public function warehouse()
     {
         return $this->belongsTo(Warehouse::class, 'warehouse_id');

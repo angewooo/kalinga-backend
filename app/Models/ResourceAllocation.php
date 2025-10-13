@@ -9,8 +9,10 @@ class ResourceAllocation extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['resource_id', 'warehouse_id', 'allocated_quantity', 'allocated_at'];
+    protected $primaryKey = 'allocation_id';
 
+    protected $fillable = ['resource_id', 'warehouse_id', 'allocated_quantity', 'allocated_at'];
+    public $timestamps = false;
     public function resource()
     {
         return $this->belongsTo(HospitalResource::class, 'resource_id');

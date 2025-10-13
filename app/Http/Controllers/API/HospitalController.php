@@ -395,12 +395,12 @@ class HospitalController extends BaseApiController
 public function addResource(Request $request, int $id): JsonResponse
 {
     try {
-        \Log::info('addResource - Starting', ['hospital_id' => $id, 'user_id' => auth()->id()]);
+        \Log::info('addResource - Starting', ['hospital_id' => $id, 'user_id' => $this->currentUser()]);
 
         // Check permission with detailed logging
         if (!$this->userCan('manage-resources')) {
             \Log::warning('addResource - Permission denied', [
-                'user_id' => auth()->id(),
+                'user_id' => $this->currentUser(),
                 'permission' => 'manage-resources',
                 'user_has_permission' => auth()->user()->hasPermissionTo('manage-resources', 'sanctum')
             ]);
@@ -452,7 +452,7 @@ public function addResource(Request $request, int $id): JsonResponse
             'error' => $e->getMessage(),
             'trace' => $e->getTraceAsString(),
             'hospital_id' => $id,
-            'user_id' => auth()->id()
+            'user_id' => $this->currentUser()
         ]);
         return response()->json([
             'success' => false,

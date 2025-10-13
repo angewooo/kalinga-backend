@@ -9,7 +9,10 @@ class AiModel extends Model
 {
     use HasFactory;
 
+    protected $primaryKey = 'model_id';
+
     protected $fillable = ['name', 'version', 'description'];
+    public $timestamps = false;
 
     public function decisions()
     {

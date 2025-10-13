@@ -9,6 +9,8 @@ class RequestEntry extends Model
 {
     use HasFactory;
 
+    protected $primaryKey = 'request_id';
+
     protected $table = 'requests';
 
     protected $fillable = [

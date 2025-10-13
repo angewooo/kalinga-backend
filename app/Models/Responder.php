@@ -9,6 +9,7 @@ class Responder extends Model
 {
     use HasFactory;
 
+    protected $primaryKey = 'responder_id';
     protected $fillable = [
         'user_id',
         'hospital_id',
@@ -17,6 +18,8 @@ class Responder extends Model
         'shift_start',
         'shift_end'
     ];
+
+    public $timestamps = false;
 
     public function user()
     {

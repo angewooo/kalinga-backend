@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 class Assignment extends Model
 {
     use HasFactory;
+    protected $primaryKey = 'assignment_id';
 
     protected $fillable = [
         'request_id',
@@ -20,6 +21,7 @@ class Assignment extends Model
         'notes'
     ];
 
+    public $timestamps = false;
     public function request()
     {
         return $this->belongsTo(RequestEntry::class, 'request_id');

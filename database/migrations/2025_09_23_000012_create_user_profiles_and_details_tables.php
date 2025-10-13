@@ -7,16 +7,22 @@ return new class extends Migration {
     public function up()
     {
         Schema::create('user_profiles', function (Blueprint $table) {
-            $table->id('profile_id');
-            $table->foreignId('user_id')->constrained()->onDelete('cascade');
-            $table->text('home_address')->nullable();
-            $table->string('emergency_contact_name', 100)->nullable();
-            $table->string('emergency_contact_number', 20)->nullable();
-            $table->string('blood_type', 5)->nullable();
-            $table->text('allergies')->nullable();
-            $table->text('medical_conditions')->nullable();
-            $table->timestamps();
-        });
+    $table->id('profile_id');
+    $table->foreignId('user_id')->constrained()->onDelete('cascade');
+    $table->string('first_name', 100)->nullable();
+    $table->string('last_name', 100)->nullable();
+    $table->string('contact_number', 20)->nullable();
+    $table->string('gender', 10)->nullable();
+    $table->text('address')->nullable();
+    $table->text('home_address')->nullable();
+    $table->string('emergency_contact_name', 100)->nullable();
+    $table->string('emergency_contact_number', 20)->nullable();
+    $table->string('blood_type', 5)->nullable();
+    $table->text('allergies')->nullable();
+    $table->text('medical_conditions')->nullable();
+    $table->timestamps();
+});
+
 
         Schema::create('responder_details', function (Blueprint $table) {
             $table->id('responder_detail_id');

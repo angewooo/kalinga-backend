@@ -95,7 +95,7 @@ class SensorController extends Controller
 
             $sensorData = $request->validated();
             $sensorData['status'] = 'active';
-            $sensorData['created_by'] = auth()->id();
+            $sensorData['created_by'] = $this->currentUser();
             $sensorData['last_heartbeat'] = now();
 
             // Generate unique sensor ID if not provided
@@ -167,11 +167,11 @@ class SensorController extends Controller
             DB::beginTransaction();
 
             $updateData = $request->validated();
-            $updateData['updated_by'] = auth()->id();
+            $updateData['updated_by'] = $this->currentUser();
 
             $sensor->update($updateData);
 
-            Log::info("Sensor updated: {$sensor->sensor_id} by user " . auth()->id());
+            Log::info("Sensor updated: {$sensor->sensor_id} by user " . $this->currentUser());
 
             DB::commit();
 
@@ -205,7 +205,7 @@ class SensorController extends Controller
 
             $sensor->delete();
 
-            Log::info("Sensor deleted: {$sensor->sensor_id} by user " . auth()->id());
+            Log::info("Sensor deleted: {$sensor->sensor_id} by user " . $this->currentUser());
 
             DB::commit();
 
@@ -413,7 +413,7 @@ class SensorController extends Controller
         try {
             $sensor->update([
                 'status' => 'active',
-                'updated_by' => auth()->id()
+                'updated_by' => $this->currentUser()
             ]);
 
             // Initialize monitoring for newly activated sensor
@@ -437,7 +437,7 @@ class SensorController extends Controller
         try {
             $sensor->update([
                 'status' => 'inactive',
-                'updated_by' => auth()->id()
+                'updated_by' => $this->currentUser()
             ]);
 
             // Clear cached data for inactive sensor
@@ -509,7 +509,7 @@ class SensorController extends Controller
                 'last_calibration' => now(),
                 'calibration_method' => $request->calibration_method,
                 'calibration_notes' => $request->notes,
-                'calibrated_by' => auth()->id()
+                'calibrated_by' => $this->currentUser()
             ];
 
             $sensor->update($calibrationData);

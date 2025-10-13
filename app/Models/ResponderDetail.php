@@ -18,6 +18,8 @@ class ResponderDetail extends Model
         'shift_end'
     ];
 
+    protected $primaryKey = 'responder_detail_id';
+
     public function user()
     {
         return $this->belongsTo(User::class, 'user_id');

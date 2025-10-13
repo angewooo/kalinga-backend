@@ -9,6 +9,8 @@ class InventoryLog extends Model
 {
     use HasFactory;
 
+    protected $primaryKey = 'log_id';
+
     protected $fillable = [
         'resource_id',
         'change_type',
@@ -16,6 +18,7 @@ class InventoryLog extends Model
         'notes',
         'logged_at'
     ];
+    public $timestamps = false;
 
     public function resource()
     {

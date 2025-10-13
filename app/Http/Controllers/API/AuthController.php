@@ -375,7 +375,7 @@ class AuthController extends BaseApiController
 
             $validated = $request->validate([
                 'current_password' => 'required|string',
-                'password' => ['required', 'confirmed', Password::min(8)->mixedCase()->numbers()],
+                'new_password' => ['required', 'confirmed', Password::min(8)->mixedCase()->numbers()],
                 'logout_other_devices' => 'sometimes|boolean'
             ]);
 
@@ -386,7 +386,7 @@ class AuthController extends BaseApiController
 
             // Update password
             $user->update([
-                'password' => Hash::make($validated['password'])
+                'password' => Hash::make($validated['new_password'])
             ]);
 
             // Optionally logout from other devices

@@ -9,6 +9,7 @@ class ResourceBatch extends Model
 {
     use HasFactory;
 
+    protected $primaryKey = 'batch_id';
     protected $fillable = [
         'resource_id',
         'batch_number',
@@ -19,7 +20,9 @@ class ResourceBatch extends Model
         'quantity_received',
         'quality_status'
     ];
-
+    public $timestamps = false;
+    protected $table = 'resource_batches';
+    
     public function resource()
     {
         return $this->belongsTo(HospitalResource::class, 'resource_id');

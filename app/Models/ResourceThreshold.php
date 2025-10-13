@@ -9,12 +9,15 @@ class ResourceThreshold extends Model
 {
     use HasFactory;
 
+    protected $primaryKey = 'threshold_id';
     protected $fillable = [
         'resource_id',
         'min_level',
         'max_level',
         'alert_triggered'
     ];
+    public $timestamps = false;
+    protected $table = 'resource_thresholds';
 
     public function resource()
     {

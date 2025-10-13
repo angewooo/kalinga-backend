@@ -8,13 +8,16 @@ use Illuminate\Database\Eloquent\Model;
 class DeliveryPerformance extends Model
 {
     use HasFactory;
-
+    protected $primaryKey = 'performance_id';
     protected $fillable = [
         'assignment_id',
         'delivery_time',
         'success_rate',
         'issues_reported'
     ];
+    public $timestamps = false;
+    protected $table = 'delivery_performance';
+    
 
     public function assignment()
     {

@@ -31,6 +31,7 @@ return new class extends Migration {
             $table->integer('training_data_size')->nullable();
             $table->timestamp('last_trained')->nullable();
             $table->json('model_parameters')->nullable();
+            
         });
 
         Schema::create('ai_decisions', function (Blueprint $table) {

@@ -176,6 +176,17 @@ return [
 
     /* Cache-specific settings */
 
+
+        /*
+     * The list of guards that should be used for permission and role checks.
+     * Add 'sanctum' here since you're using Laravel Sanctum for API authentication.
+     */
+    'guards' => [
+        'web',
+        'api',
+        'sanctum',
+    ],
+
     'cache' => [
 
         /*
@@ -199,4 +210,6 @@ return [
 
         'store' => 'default',
     ],
+
+
 ];

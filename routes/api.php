@@ -16,6 +16,9 @@ use App\Http\Controllers\API\VehicleController;
 use App\Http\Controllers\API\SystemController;
 use App\Http\Controllers\API\AuthController;
 
+// MINIMAL TEST - Add this temporarily at the top of your api.php routes
+Route::put('users/{id}', [UserController::class, 'update']);
+
 // ULTRA SIMPLE TEST - Add this at the VERY TOP
 Route::get('/emergency-test', function() {
     return response()->json(['status' => 'OK', 'message' => 'Basic route working']);
@@ -69,37 +72,49 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('logout', [AuthController::class, 'logout']);
         Route::get('me', [AuthController::class, 'me']);
         Route::post('refresh', [AuthController::class, 'refresh']);
-        Route::put('change-password', [AuthController::class, 'changePassword']);
+        Route::post('/change-password', [AuthController::class, 'updatePassword']);
     });
 
     // ================================
-    // USER MANAGEMENT ROUTES
-    // ================================
-    Route::apiResource('users', UserController::class);
-    Route::prefix('users')->group(function () {
-        Route::get('{user}/profile', [UserController::class, 'getProfile']);
-        Route::put('{user}/profile', [UserController::class, 'updateProfile']);
-        Route::get('{user}/roles', [UserController::class, 'getRoles']);
-        Route::post('{user}/roles', [UserController::class, 'assignRole']);
-        Route::delete('{user}/roles/{role}', [UserController::class, 'removeRole']);
-        Route::get('{user}/permissions', [UserController::class, 'getPermissions']);
-        Route::post('{user}/activate', [UserController::class, 'activate']);
-        Route::post('{user}/deactivate', [UserController::class, 'deactivate']);
-    });
+// USER MANAGEMENT ROUTES - FIXED
+// ================================
+Route::prefix('users')->group(function () {
+    // Basic CRUD routes
+    Route::get('/', [UserController::class, 'index']);
+    Route::post('/', [UserController::class, 'store']);
+    Route::get('/{id}', [UserController::class, 'show']);
+    Route::put('/{id}', [UserController::class, 'update']); // ← THIS WAS MISSING
+    Route::patch('/{id}', [UserController::class, 'update']);
+    Route::delete('/{id}', [UserController::class, 'destroy']);
+    
+    // Profile routes
+    Route::get('{user}/profile', [UserController::class, 'getProfile']);
+    Route::put('{user}/profile', [UserController::class, 'updateProfile']);
+    
+    // Roles & Permissions routes
+    Route::get('{user}/roles', [UserController::class, 'getRoles']);
+    Route::post('{user}/roles', [UserController::class, 'updateRoles']);
+    Route::delete('{user}/roles/{role}', [UserController::class, 'removeRole']);
+    Route::get('{user}/permissions', [UserController::class, 'getPermissions']);
+    
+    // Activation routes
+    Route::post('{user}/activate', [UserController::class, 'activate']);
+    Route::post('{user}/deactivate', [UserController::class, 'deactivate']);
+});
 
-    // Bulk User Operations
-    Route::prefix('users/bulk')->group(function () {
-        Route::post('create', [UserController::class, 'bulkCreate']);
-        Route::put('update', [UserController::class, 'bulkUpdate']);
-        Route::delete('delete', [UserController::class, 'bulkDelete']);
-        Route::post('import', [UserController::class, 'importUsers']);
-        Route::get('export', [UserController::class, 'exportUsers']);
-    });
+// Bulk User Operations
+Route::prefix('users/bulk')->group(function () {
+    Route::post('create', [UserController::class, 'bulkCreate']);
+    Route::put('update', [UserController::class, 'bulkUpdate']);
+    Route::delete('delete', [UserController::class, 'bulkDelete']);
+    Route::post('import', [UserController::class, 'importUsers']);
+    Route::get('export', [UserController::class, 'exportUsers']);
+});
 
 // ================================
 // SUPPLIER MANAGEMENT ROUTES
 // ================================
-Route::prefix('suppliers')->middleware(['auth:api'])->group(function () {    
+Route::prefix('suppliers')->middleware(['auth:sanctum'])->group(function () {    
     // SPECIFIC ROUTES FIRST (no parameters)
     Route::get('search', [SupplierController::class, 'search']);
     Route::get('statistics', [SupplierController::class, 'getStatistics']);
@@ -162,7 +177,7 @@ Route::prefix('suppliers')->middleware(['auth:api'])->group(function () {
         Route::post('{hospital}/thresholds', [HospitalController::class, 'setThreshold']);
         Route::put('{hospital}/thresholds/{threshold}', [HospitalController::class, 'updateThreshold']);
         
-        // Inventory Management - check if these methods exist
+        // Inventory Managelllllllllment - check if these methods exist
         Route::get('{hospital}/inventory', [HospitalController::class, 'getInventory']);
         Route::get('{hospital}/inventory/logs', [HospitalController::class, 'getInventoryLogs']);
         Route::post('{hospital}/inventory/adjustment', [HospitalController::class, 'adjustInventory']);
@@ -180,7 +195,7 @@ Route::prefix('suppliers')->middleware(['auth:api'])->group(function () {
         Route::get('export-inventory', [HospitalController::class, 'exportInventory']);
     });
 
-    
+
     // ================================
     // REQUEST MANAGEMENT ROUTES
     // ================================

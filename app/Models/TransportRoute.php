@@ -9,5 +9,8 @@ class TransportRoute extends Model
 {
     use HasFactory;
 
+    protected $primaryKey = 'transport_id';
+
     protected $fillable = ['start_location', 'end_location', 'distance', 'estimated_time'];
+    public $timestamps = false;
 }

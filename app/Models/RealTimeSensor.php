@@ -15,6 +15,8 @@ class RealTimeSensor extends Model
         'status',
         'installed_at'
     ];
+    protected $primaryKey = 'sensor_id';
+    public $timestamps = false;
 
     public function readings()
     {

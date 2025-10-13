@@ -14,7 +14,8 @@ class SensorReading extends Model
         'reading_value',
         'recorded_at'
     ];
-
+    protected $primaryKey = 'reading_id';
+    public $timestamps = false;
     public function sensor()
     {
         return $this->belongsTo(RealTimeSensor::class, 'sensor_id');

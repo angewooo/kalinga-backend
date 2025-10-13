@@ -2,26 +2,50 @@
 
 namespace Database\Seeders;
 
-use App\Models\User;
-
 use Illuminate\Database\Seeder;
 
 class DatabaseSeeder extends Seeder
 {
-    /**
-     * Seed the application's database.
-     */
     public function run(): void
     {
-        // 👇 Call other seeders here
         $this->call([
-            RolePermissionSeeder::class,
-        ]);
+    RolePermissionSeeder::class,
+    UserSeeder::class,
+    UserDetailsSeeder::class,
+    HospitalSeeder::class,
+    HospitalResourceSeeder::class,
+    SupplierSeeder::class,
+    ResponderSeeder::class,
+    RequestSeeder::class,
+    VehicleSeeder::class,
+    AssignmentSeeder::class,
+    WarehouseSeeder::class,
+    SupplyOrderSeeder::class,
+    ResourceAllocationSeeder::class,
+    InventoryLogSeeder::class,
+    TransportRouteSeeder::class,
+    AiModelSeeder::class,
+    ForecastResultSeeder::class,
+    ModelRetrainingSeeder::class,
+    PredictionAccuracySeeder::class,
+    RealTimeSensorSeeder::class,
+    SensorReadingSeeder::class,
+    SystemHealthSeeder::class,
+    SystemPerformanceSeeder::class,
+    AiDecisionSeeder::class,
+    NotificationChannelSeeder::class,
+    NotificationSeeder::class,
+    NotificationLogSeeder::class,
+    AutomatedActionSeeder::class,
+    HistoricalDemandSeeder::class,
+    AllocationAlgorithmSeeder::class,
+    ResourceBatchSeeder::class,
+    ResourceThresholdSeeder::class,
+    ModelHasPermissionSeeder::class,
+    PersonalAccessTokenSeeder::class,
+    PasswordResetTokenSeeder::class,
+    SessionSeeder::class
+]);
 
-        // Example test user (optional)
-        User::factory()->create([
-            'name' => 'Test User',
-            'email' => 'test@example.com',
-        ]);
     }
 }

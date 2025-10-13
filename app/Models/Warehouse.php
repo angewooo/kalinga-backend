@@ -9,8 +9,10 @@ class Warehouse extends Model
 {
     use HasFactory;
 
+    protected $primaryKey = 'warehouse_id';
     protected $fillable = ['name', 'location', 'capacity'];
 
+    public $timestamps = false;
     public function supplyOrders()
     {
         return $this->hasMany(SupplyOrder::class, 'warehouse_id');
